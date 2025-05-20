@@ -1,58 +1,56 @@
 const express = require('express');
+const { middleware, Client } = require('@line/bot-sdk');
 const axios = require('axios');
-const dotenv = require('dotenv');
-dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 3000;
-
-const LINE_ACCESS_TOKEN = process.env.LINE_ACCESS_TOKEN;
-const LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
 app.use(express.json());
 
-// LINEのWebhook受信
-app.post('/webhook', async (req, res) => {
-  try {
-    const events = req.body.events;
-    for (const event of events) {
-      if (event.type === 'message' && event.message.type === 'text') {
-        const userMessage = event.message.text;
+// 環境変数から設定を読み込む
+const config = {
+  channelAccessToken: process.env.LINE_ACCESS_TOKEN,
+  channelSecret: process.env.LINE_CHANNEL_SECRET,
+};
+const client = new Client(config);
 
-        // Gemini APIに送信
-        const geminiResponse = await axios.post(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${GEMINI_API_KEY}`,
-          {
-            contents: [{ parts: [{ text: userMessage }] }]
-          }
-        );
+// Webhookエンドポイント
+app.post('/webhook', middleware(config), async (req, res) => {
+  const events = req.body.events;
 
-        const replyText = geminiResponse.data.candidates?.[0]?.content?.parts?.[0]?.text || "すみません、うまく返答できませんでした。";
+  const results = await Promise.all(events.map(async (event) => {
+    if (event.type === 'message' && event.message.type === 'text') {
+      const userMessage = event.message.text;
 
-        // LINEに返信
-        await axios.post(
-          'https://api.line.me/v2/bot/message/reply',
-          {
-            replyToken: event.replyToken,
-            messages: [{ type: 'text', text: replyText }]
+      // DeepSeek-Chat へのプロンプト
+      const openrouterResponse = await axios.post(
+        'https://openrouter.ai/api/v1/chat/completions',
+        {
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: 'あなたは親しみやすく、ユーモアも交えたLINE用会話アシスタントです。' },
+            { role: 'user', content: userMessage },
+          ],
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
           },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${LINE_ACCESS_TOKEN}`
-            }
-          }
-        );
-      }
+        }
+      );
+
+      const botReply = openrouterResponse.data.choices[0].message.content;
+
+      return client.replyMessage(event.replyToken, {
+        type: 'text',
+        text: `🧠 ${botReply}`,
+      });
     }
-    res.sendStatus(200);
-  } catch (error) {
-    console.error('Gemini APIエラー:', error.response?.data || error.message);
-    res.sendStatus(500);
-  }
+  }));
+
+  res.status(200).json(results);
 });
 
+const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
