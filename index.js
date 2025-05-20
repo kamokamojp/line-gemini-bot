@@ -5,31 +5,35 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
-// 環境変数の読み込み
+// LINE SDK 設定
 const config = {
   channelAccessToken: process.env.LINE_ACCESS_TOKEN,
   channelSecret: process.env.LINE_CHANNEL_SECRET,
 };
 const client = new Client(config);
 
+// Webhook エンドポイント
 app.post('/webhook', middleware(config), async (req, res) => {
   const events = req.body.events;
+  console.log('✅ 受信イベント:', events);
 
   try {
-    await Promise.all(events.map(async (event) => {
+    const results = await Promise.all(events.map(async (event) => {
       if (event.type !== 'message' || event.message.type !== 'text') {
-        return; // テキスト以外はスルー
+        console.log('⏭️ スキップ（非テキスト）:', event);
+        return null;
       }
 
       const userMessage = event.message.text;
+      console.log('💬 ユーザーのメッセージ:', userMessage);
 
-      // OpenRouter 経由で DeepSeek-Chat に問い合わせ
-      const openrouterResponse = await axios.post(
+      // OpenRouter (DeepSeek-Chat) へのリクエスト
+      const response = await axios.post(
         'https://openrouter.ai/api/v1/chat/completions',
         {
           model: 'deepseek-chat',
           messages: [
-            { role: 'system', content: 'あなたは親しみやすくユーモアもあるLINE会話アシスタントです。' },
+            { role: 'system', content: 'あなたはLINE用の親しみやすくユーモラスなアシスタントです。' },
             { role: 'user', content: userMessage },
           ],
         },
@@ -41,51 +45,24 @@ app.post('/webhook', middleware(config), async (req, res) => {
         }
       );
 
-      const botReply = openrouterResponse.data.choices?.[0]?.message?.content;
+      const replyText = response.data.choices[0].message.content;
+      console.log('🤖 Bot返信内容:', replyText);
 
-      if (!botReply) {
-        console.error('❌ Botの返答が取得できませんでした。', openrouterResponse.data);
-        return;
-      }
-
-      // LINE に返信
-      await client.replyMessage(event.replyToken, {
+      return client.replyMessage(event.replyToken, {
         type: 'text',
-        text: `🧠 ${botReply}`,
+        text: replyText,
       });
     }));
 
-    res.sendStatus(200);
+    res.status(200).json(results);
   } catch (error) {
-    console.error('🔴 Webhook処理中にエラー発生:', error.response?.data || error.message);
-    res.sendStatus(500);
+    console.error('❌ Webhook処理エラー:', error.response?.data || error.message);
+    res.status(500).send('Internal Server Error');
   }
 });
 
+// サーバー起動
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+  console.log(`🚀 Server is running on port ${port}`);
 });
-
-
-...
-console.log('✅ イベント受信:', events);
-
-await Promise.all(events.map(async (event) => {
-  if (event.type !== 'message' || event.message.type !== 'text') {
-    console.log('ℹ️ 非対応イベント。スキップ:', event);
-    return;
-  }
-
-  const userMessage = event.message.text;
-  console.log('💬 ユーザーからのメッセージ:', userMessage);
-
-  try {
-    const openrouterResponse = await axios.post(...);
-    ...
-    console.log('✅ OpenRouter 応答:', botReply);
-    await client.replyMessage(...);
-  } catch (err) {
-    console.error('❌ OpenRouter 呼び出しエラー:', err.response?.data || err.message);
-  }
-}))
