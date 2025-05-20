@@ -13,51 +13,59 @@ const config = {
 const client = new Client(config);
 
 app.post('/webhook', middleware(config), async (req, res) => {
-  const events = req.body.events;
+  try {
+    const events = req.body.events;
 
-  const results = await Promise.all(
-    events.map(async (event) => {
-      if (event.type !== 'message' || event.message.type !== 'text') {
-        return Promise.resolve(null);
-      }
+    const results = await Promise.all(
+      events.map(async (event) => {
+        if (event.type !== 'message' || event.message.type !== 'text') {
+          return Promise.resolve(null);
+        }
 
-      const userMessage = event.message.text;
+        const userMessage = event.message.text;
 
-      try {
-        const response = await axios.post(
-          'https://openrouter.ai/api/v1/chat/completions',
-          {
-            model: 'deepseek-chat',
-            messages: [
-              { role: 'system', content: 'あなたは親しみやすくユーモアのあるLINEの会話アシスタントです。' },
-              { role: 'user', content: userMessage }
-            ]
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              'Content-Type': 'application/json'
+        try {
+          const response = await axios.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            {
+              model: 'deepseek-chat',
+              messages: [
+                {
+                  role: 'system',
+                  content: 'あなたは親しみやすく、ユーモアを交えたLINE用の会話アシスタントです。',
+                },
+                { role: 'user', content: userMessage },
+              ],
+            },
+            {
+              headers: {
+                'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                'Content-Type': 'application/json',
+              },
             }
-          }
-        );
+          );
 
-        const replyText = response.data.choices[0].message.content;
+          const replyText = response.data.choices[0].message.content;
 
-        return client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: `🤖 ${replyText}`
-        });
-      } catch (error) {
-        console.error('OpenRouter APIエラー:', error.response?.data || error.message);
-        return client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: '⚠️ エラーが発生しました。後でもう一度お試しください。'
-        });
-      }
-    })
-  );
+          return client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: `🤖 ${replyText}`,
+          });
+        } catch (apiError) {
+          console.error('OpenRouter APIエラー:', apiError.response?.data || apiError.message);
+          return client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '⚠️ OpenRouterからの応答エラーが発生しました。',
+          });
+        }
+      })
+    );
 
-  res.status(200).json(results);
+    res.status(200).json(results);
+  } catch (e) {
+    console.error('Webhookハンドリングエラー:', e.message);
+    res.status(500).send('Webhook error');
+  }
 });
 
 const port = process.env.PORT || 3000;
