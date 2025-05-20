@@ -24,11 +24,10 @@ app.post('/webhook', middleware(config), async (req, res) => {
         const userMessage = event.message.text;
 
         try {
-          // OpenRouter 経由で DeepSeek-Chat に問い合わせ
           const response = await axios.post(
             'https://openrouter.ai/api/v1/chat/completions',
             {
-              model: 'deepseek-ai/deepseek-chat', // ✅ 正しい形式
+              model: 'deepseek-chat',
               messages: [
                 {
                   role: 'system',
@@ -50,14 +49,14 @@ app.post('/webhook', middleware(config), async (req, res) => {
 
           const replyText = response.data.choices[0].message.content;
 
-          // LINEに返信
-          await client.replyMessage(event.replyToken, {
+          return client.replyMessage(event.replyToken, {
             type: 'text',
             text: `🤖 ${replyText}`,
           });
         } catch (error) {
           console.error('OpenRouterエラー:', error.response?.data || error.message);
-          await client.replyMessage(event.replyToken, {
+
+          return client.replyMessage(event.replyToken, {
             type: 'text',
             text: '⚠️ エラーが発生しました。しばらくしてからもう一度お試しください。',
           });
