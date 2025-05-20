@@ -66,3 +66,26 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
+
+
+...
+console.log('✅ イベント受信:', events);
+
+await Promise.all(events.map(async (event) => {
+  if (event.type !== 'message' || event.message.type !== 'text') {
+    console.log('ℹ️ 非対応イベント。スキップ:', event);
+    return;
+  }
+
+  const userMessage = event.message.text;
+  console.log('💬 ユーザーからのメッセージ:', userMessage);
+
+  try {
+    const openrouterResponse = await axios.post(...);
+    ...
+    console.log('✅ OpenRouter 応答:', botReply);
+    await client.replyMessage(...);
+  } catch (err) {
+    console.error('❌ OpenRouter 呼び出しエラー:', err.response?.data || err.message);
+  }
+}))
