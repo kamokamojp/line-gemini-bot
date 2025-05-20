@@ -1,7 +1,6 @@
 {
-  "name": "line-gemini-bot",
+  "name": "line-openrouter-bot",
   "version": "1.0.0",
-  "description": "LINE Bot integrated with Gemini API using Node.js and Express",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -9,11 +8,6 @@
   "dependencies": {
     "@line/bot-sdk": "^7.5.1",
     "axios": "^1.6.8",
-    "dotenv": "^16.4.1",
     "express": "^4.18.2"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "license": "MIT"
+  }
 }
