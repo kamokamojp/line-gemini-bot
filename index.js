@@ -1,68 +1,50 @@
-const express = require('express');
 const axios = require('axios');
 const line = require('@line/bot-sdk');
-require('dotenv').config();
 
-const app = express();
-const port = process.env.PORT || 3000;
-
-// LINE設定
-const config = {
+const client = new line.Client({
   channelAccessToken: process.env.LINE_ACCESS_TOKEN,
   channelSecret: process.env.LINE_CHANNEL_SECRET
-};
+});
 
-const client = new line.Client(config);
-
-// JSON受信設定
-app.use(express.json());
-
-// Webhookルート
+// LINE webhook
 app.post('/webhook', async (req, res) => {
   const events = req.body.events;
 
-  // 応答処理
-  try {
-    for (const event of events) {
-      if (event.type === 'message' && event.message.type === 'text') {
-        const userMessage = event.message.text;
+  for (const event of events) {
+    if (event.type === 'message' && event.message.type === 'text') {
+      const userText = event.message.text;
 
-        // Gemini API呼び出し
+      // Gemini API呼び出し
+      try {
         const geminiResponse = await axios.post(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
           {
             contents: [{
-              parts: [{ text: userMessage }]
+              parts: [{ text: userText }]
             }]
           },
           {
-            headers: {
-              'Content-Type': 'application/json'
-            }
+            headers: { 'Content-Type': 'application/json' }
           }
         );
 
-        // Geminiの返答取り出し
-        const replyText =
-          geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text
-          || 'うまく応答できませんでした。';
+        const geminiReply = geminiResponse.data.candidates?.[0]?.content?.parts?.[0]?.text || "返事が見つかりませんでした。";
 
-        // LINE返信
+        // LINEに返信
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: replyText
+          text: geminiReply
+        });
+
+      } catch (error) {
+        console.error('Gemini API Error:', error);
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: 'Geminiとの通信でエラーが発生しました。'
         });
       }
     }
-
-    res.sendStatus(200);
-  } catch (err) {
-    console.error('エラー:', err);
-    res.sendStatus(500);
   }
-});
 
-// サーバー起動
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+  res.sendStatus(200);
 });
